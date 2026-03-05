@@ -22,6 +22,11 @@ function isSleepTime(): boolean {
   return h >= 22 || h < 6;
 }
 
+// Floor Y: where the cat's center sits when standing on the floor line (68% viewport)
+function floorY(): number {
+  return window.innerHeight * 0.68 - CAT_H / 2;
+}
+
 function clampPos(x: number, y: number): Position {
   const margin = 20;
   return {
@@ -36,7 +41,7 @@ export default function App() {
   const [catName, setCatName] = useState<string | null>(() => storage.getCatName());
   const [catPos, setCatPos] = useState<Position>(() => ({
     x: window.innerWidth / 2,
-    y: window.innerHeight / 2,
+    y: floorY(),
   }));
   const [catState, setCatState] = useState<CatState>('idle');
   const [facingLeft, setFacingLeft] = useState(false);
@@ -64,6 +69,7 @@ export default function App() {
   const stateOverrideRef = useRef<CatState | null>(null);
   const lastInteractionRef = useRef(Date.now());
   const dialogueActiveRef = useRef(false);
+  const lastDialogueTimeRef = useRef(0);
 
   useEffect(() => { foodInBowlRef.current = foodInBowl; }, [foodInBowl]);
   useEffect(() => { catNameRef.current = catName; }, [catName]);
@@ -78,19 +84,22 @@ export default function App() {
 
   const getBedCenter = useCallback((): Position => ({
     x: 90,
-    y: window.innerHeight - 80,
+    y: floorY(),
   }), []);
 
   // ── Dialogue ──────────────────────────────────────────────────────────────
   const showDialogue = useCallback(async (trigger: DialogueTrigger) => {
+    const now = Date.now();
+    if (now - lastDialogueTimeRef.current < 5000) return;
+    lastDialogueTimeRef.current = now;
+    dialogueActiveRef.current = true;
     const name = catNameRef.current ?? 'Neko';
     const key = apiKeyRef.current;
     const text = await getDialogue(trigger, name, key);
     setDialogue(text);
     setDialogueKey((k) => k + 1);
-    dialogueActiveRef.current = true;
-    setTimeout(() => { dialogueActiveRef.current = false; }, 4500);
-    setChatHistory((prev) => [{ text, ts: Date.now() }, ...prev].slice(0, 12));
+    setTimeout(() => { dialogueActiveRef.current = false; }, 5000);
+    setChatHistory((prev) => [{ text, ts: now }, ...prev].slice(0, 12));
   }, []);
 
   // ── State helpers ─────────────────────────────────────────────────────────
@@ -181,7 +190,8 @@ export default function App() {
         setCatPos(clampPos(bowl.x, bowl.y - 110));
         doFeedInteraction();
       } else {
-        setCatPos(clampPos(dropX, dropY));
+        // Always land on the floor
+        setCatPos(clampPos(dropX, floorY()));
         if (!stateOverrideRef.current) {
           setCatState('idle');
           showDialogue('put_down');
@@ -275,8 +285,7 @@ export default function App() {
           if (Math.random() < 0.6) {
             const margin = 120;
             const tx = margin + Math.random() * (window.innerWidth - margin * 2);
-            const ty = window.innerHeight * 0.25 + Math.random() * (window.innerHeight * 0.45);
-            const newPos = clampPos(tx, ty);
+            const newPos = clampPos(tx, floorY());
             setCatPos((cur) => {
               setFacingLeft(newPos.x < cur.x);
               return cur;

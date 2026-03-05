@@ -15,7 +15,7 @@ export default function SpeechBubble({ text }: Props) {
     }
     setDisplayed(text);
     setVisible(true);
-    const t = setTimeout(() => setVisible(false), 3500);
+    const t = setTimeout(() => setVisible(false), 5000);
     return () => clearTimeout(t);
   }, [text]);
 

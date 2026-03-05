@@ -11,18 +11,10 @@ import SettingsPanel from './components/SettingsPanel';
 
 const CAT_W = 128;
 const CAT_H = 176;
-const BOWL_OFFSET = { x: 0, y: -40 }; // bowl center relative to viewport center-bottom
 
 function getHungerLevel(lastFedIso: string): number {
   const mins = (Date.now() - new Date(lastFedIso).getTime()) / 60000;
   return Math.max(0, 100 - (mins / 360) * 100);
-}
-
-function getCatStateFromHunger(hunger: number): CatState {
-  if (hunger > 67) return 'idle';
-  if (hunger > 33) return 'idle';
-  if (hunger > 0)  return 'hungry';
-  return 'starving';
 }
 
 function isSleepTime(): boolean {
@@ -30,66 +22,79 @@ function isSleepTime(): boolean {
   return h >= 22 || h < 6;
 }
 
+function clampPos(x: number, y: number): Position {
+  const margin = 20;
+  return {
+    x: Math.max(margin + CAT_W / 2, Math.min(window.innerWidth - margin - CAT_W / 2, x)),
+    y: Math.max(margin + CAT_H / 2, Math.min(window.innerHeight - margin - CAT_H / 2, y)),
+  };
+}
+
+interface ChatEntry { text: string; ts: number }
+
 export default function App() {
   const [catName, setCatName] = useState<string | null>(() => storage.getCatName());
-  const [catPos, setCatPos] = useState<Position>({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const [catPos, setCatPos] = useState<Position>(() => ({
+    x: window.innerWidth / 2,
+    y: window.innerHeight / 2,
+  }));
   const [catState, setCatState] = useState<CatState>('idle');
   const [facingLeft, setFacingLeft] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState<Position>({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false); // only for CSS transition toggle
   const [foodInBowl, setFoodInBowl] = useState(() => storage.getFoodInBowl());
   const [lastFed, setLastFed] = useState(() => storage.getLastFed());
   const [hungerLevel, setHungerLevel] = useState(() => getHungerLevel(storage.getLastFed()));
   const [dialogue, setDialogue] = useState<string | null>(null);
   const [dialogueKey, setDialogueKey] = useState(0);
+  const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKeyState] = useState(() => storage.getApiKey());
   const [apiToast, setApiToast] = useState<string | null>(null);
   const [isSleeping, setIsSleeping] = useState(false);
-  const [sleepBubble, setSleepBubble] = useState(false);
 
-  const lastInteractionRef = useRef(Date.now());
-  const behaviorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const stateOverrideRef = useRef<CatState | null>(null); // for transient states (eating, happy)
-
+  // Refs for drag — set up once, no stale closures
+  const isDraggingRef = useRef(false);
+  const wasDraggedRef = useRef(false);
+  const dragOffsetRef = useRef<Position>({ x: 0, y: 0 });
+  const foodInBowlRef = useRef(foodInBowl);
   const catNameRef = useRef(catName);
   const apiKeyRef = useRef(apiKey);
-  const catPosRef = useRef(catPos);
+  const isSleepingRef = useRef(isSleeping);
+  const catStateRef = useRef(catState);
+  const stateOverrideRef = useRef<CatState | null>(null);
+  const lastInteractionRef = useRef(Date.now());
+  const dialogueActiveRef = useRef(false);
+
+  useEffect(() => { foodInBowlRef.current = foodInBowl; }, [foodInBowl]);
   useEffect(() => { catNameRef.current = catName; }, [catName]);
   useEffect(() => { apiKeyRef.current = apiKey; }, [apiKey]);
-  useEffect(() => { catPosRef.current = catPos; }, [catPos]);
+  useEffect(() => { isSleepingRef.current = isSleeping; }, [isSleeping]);
+  useEffect(() => { catStateRef.current = catState; }, [catState]);
 
-  // Bowl position (derived from viewport)
   const getBowlCenter = useCallback((): Position => ({
-    x: window.innerWidth / 2 + BOWL_OFFSET.x,
+    x: window.innerWidth / 2,
     y: window.innerHeight - 100,
   }), []);
 
   const getBedCenter = useCallback((): Position => ({
-    x: 80,
+    x: 90,
     y: window.innerHeight - 80,
   }), []);
 
-  // Clamp cat position inside viewport
-  function clampPos(x: number, y: number): Position {
-    const margin = 20;
-    return {
-      x: Math.max(margin + CAT_W / 2, Math.min(window.innerWidth - margin - CAT_W / 2, x)),
-      y: Math.max(margin + CAT_H / 2, Math.min(window.innerHeight - margin - CAT_H / 2, y)),
-    };
-  }
-
-  // Show dialogue
-  async function showDialogue(trigger: DialogueTrigger) {
+  // ── Dialogue ──────────────────────────────────────────────────────────────
+  const showDialogue = useCallback(async (trigger: DialogueTrigger) => {
     const name = catNameRef.current ?? 'Neko';
     const key = apiKeyRef.current;
     const text = await getDialogue(trigger, name, key);
     setDialogue(text);
     setDialogueKey((k) => k + 1);
-  }
+    dialogueActiveRef.current = true;
+    setTimeout(() => { dialogueActiveRef.current = false; }, 4500);
+    setChatHistory((prev) => [{ text, ts: Date.now() }, ...prev].slice(0, 12));
+  }, []);
 
-  // Transient state helper — set state for N ms then revert
-  function transientState(state: CatState, ms: number, then: CatState = 'idle') {
+  // ── State helpers ─────────────────────────────────────────────────────────
+  function setTransientState(state: CatState, ms: number, then: CatState = 'idle') {
     stateOverrideRef.current = state;
     setCatState(state);
     setTimeout(() => {
@@ -98,152 +103,89 @@ export default function App() {
     }, ms);
   }
 
-  // Feed cat when dragged onto bowl
-  function handleFeedInteraction() {
-    if (stateOverrideRef.current) return;
-    if (foodInBowl > 0) {
-      const newFood = foodInBowl - 1;
+  // ── Feed interaction (called from window onUp) ────────────────────────────
+  function doFeedInteraction() {
+    const food = foodInBowlRef.current;
+    if (food > 0) {
+      const newFood = food - 1;
       const nowIso = new Date().toISOString();
+      foodInBowlRef.current = newFood;
       setFoodInBowl(newFood);
       storage.setFoodInBowl(newFood);
       setLastFed(nowIso);
       storage.setLastFed(nowIso);
       storage.incrementFeeds();
       setHungerLevel(100);
-      transientState('eating', 2000, 'happy');
-      setTimeout(() => transientState('happy', 1500, 'idle'), 2000);
+      // Eating → happy → idle chain
+      stateOverrideRef.current = 'eating';
+      setCatState('eating');
+      setTimeout(() => {
+        stateOverrideRef.current = 'happy';
+        setCatState('happy');
+        setTimeout(() => {
+          stateOverrideRef.current = null;
+          setCatState('idle');
+        }, 1500);
+      }, 2000);
       showDialogue('eaten');
     } else {
-      transientState('hungry', 1500, 'idle');
+      stateOverrideRef.current = null;
+      setCatState('hungry');
+      setTimeout(() => {
+        if (!stateOverrideRef.current) setCatState('idle');
+      }, 1500);
       showDialogue('bowl_empty');
     }
   }
 
-  // Hunger tick
+  // ── Global mouse handlers (set up once) ───────────────────────────────────
   useEffect(() => {
-    const id = setInterval(() => {
-      const level = getHungerLevel(lastFed);
-      setHungerLevel(level);
-
-      if (!isDragging && !isSleeping && stateOverrideRef.current === null) {
-        const base = getCatStateFromHunger(level);
-        setCatState(base);
-
-        if (level === 0) {
-          showDialogue('very_hungry');
-        }
-      }
-    }, 30000); // every 30s update hunger display
-    return () => clearInterval(id);
-  }, [lastFed, isDragging, isSleeping]);
-
-  // Sleep check
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (isDragging || stateOverrideRef.current !== null) return;
-      const shouldSleep = isSleepTime() ||
-        (Date.now() - lastInteractionRef.current > 5 * 60 * 1000);
-
-      if (shouldSleep && !isSleeping) {
-        const bed = getBedCenter();
-        setCatPos(bed);
-        setIsSleeping(true);
-        setCatState('sleeping');
-        setSleepBubble(true);
-        setTimeout(() => setSleepBubble(false), 4000);
-        showDialogue('waking_up'); // actually shows on wake, but we trigger on sleep
-      } else if (!shouldSleep && isSleeping) {
-        setIsSleeping(false);
-        setCatState('idle');
-        showDialogue('waking_up');
-      }
-    }, 15000);
-    return () => clearInterval(id);
-  }, [isDragging, isSleeping, getBedCenter]);
-
-  // Random idle behavior
-  const scheduleBehavior = useCallback(() => {
-    const delay = 8000 + Math.random() * 7000;
-    behaviorTimerRef.current = setTimeout(() => {
-      if (!isDragging && !isSleeping && stateOverrideRef.current === null) {
-        const behaviors = ['walk', 'yawn', 'stretch'] as const;
-        const pick = behaviors[Math.floor(Math.random() * behaviors.length)];
-
-        if (pick === 'walk') {
-          const margin = 100;
-          const tx = margin + Math.random() * (window.innerWidth - margin * 2);
-          const ty = window.innerHeight * 0.3 + Math.random() * (window.innerHeight * 0.5);
-          const newPos = clampPos(tx, ty);
-          setFacingLeft(newPos.x < catPosRef.current.x);
-          setCatPos(newPos);
-          setCatState('walk');
-          setTimeout(() => {
-            if (stateOverrideRef.current === null) setCatState('idle');
-          }, 2000);
-        } else {
-          // yawn / stretch — stay in idle visually, just show dialogue later
-          setCatState('idle');
-        }
-      }
-      scheduleBehavior();
-    }, delay);
-  }, [isDragging, isSleeping]);
-
-  useEffect(() => {
-    scheduleBehavior();
-    return () => {
-      if (behaviorTimerRef.current) clearTimeout(behaviorTimerRef.current);
-    };
-  }, [scheduleBehavior]);
-
-  // Mouse drag handlers
-  function handleMouseDown(e: React.MouseEvent) {
-    if (isSleeping) {
-      setIsSleeping(false);
-      setCatState('idle');
-      showDialogue('waking_up');
-      return;
-    }
-    lastInteractionRef.current = Date.now();
-    e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDragOffset({
-      x: e.clientX - rect.left - CAT_W / 2,
-      y: e.clientY - rect.top - CAT_H / 2,
-    });
-    setIsDragging(true);
-    setCatState('held');
-    showDialogue('picked_up');
-  }
-
-  useEffect(() => {
-    if (!isDragging) return;
-
     function onMove(e: MouseEvent) {
+      if (!isDraggingRef.current) return;
+      wasDraggedRef.current = true;
       const newPos = clampPos(
-        e.clientX - dragOffset.x,
-        e.clientY - dragOffset.y,
+        e.clientX - dragOffsetRef.current.x,
+        e.clientY - dragOffsetRef.current.y,
       );
       setCatPos(newPos);
     }
 
     function onUp(e: MouseEvent) {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
       setIsDragging(false);
       lastInteractionRef.current = Date.now();
 
-      const dropX = e.clientX - dragOffset.x;
-      const dropY = e.clientY - dragOffset.y;
-      const bowl = getBowlCenter();
+      if (!wasDraggedRef.current) {
+        // Pure click — pet the cat
+        if (!isSleepingRef.current && !stateOverrideRef.current) {
+          storage.incrementPets();
+          stateOverrideRef.current = 'happy';
+          setCatState('happy');
+          setTimeout(() => {
+            stateOverrideRef.current = null;
+            setCatState('idle');
+          }, 2000);
+          showDialogue('petted');
+        }
+        return;
+      }
+
+      // Was a drag — check bowl overlap
+      const dropX = e.clientX - dragOffsetRef.current.x;
+      const dropY = e.clientY - dragOffsetRef.current.y;
+      const bowl = { x: window.innerWidth / 2, y: window.innerHeight - 100 };
       const dist = Math.hypot(dropX - bowl.x, dropY - bowl.y);
 
-      if (dist < 80) {
-        // Snap to bowl area
-        setCatPos(clampPos(bowl.x, bowl.y - 80));
-        handleFeedInteraction();
+      if (dist < 90) {
+        setCatPos(clampPos(bowl.x, bowl.y - 110));
+        doFeedInteraction();
       } else {
         setCatPos(clampPos(dropX, dropY));
-        setCatState('idle');
-        showDialogue('put_down');
+        if (!stateOverrideRef.current) {
+          setCatState('idle');
+          showDialogue('put_down');
+        }
       }
     }
 
@@ -253,22 +195,111 @@ export default function App() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [isDragging, dragOffset, getBowlCenter, foodInBowl]);
+  }, []); // ← empty deps: set up once, refs handle mutable values
 
-  // Click (pet) — fires when drag distance was small
-  function handleClick(e: React.MouseEvent) {
-    if (isDragging) return;
-    lastInteractionRef.current = Date.now();
+  // ── Mouse down on cat ────────────────────────────────────────────────────
+  function handleMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
     e.stopPropagation();
-    if (isSleeping) return;
-    transientState('happy', 2000, 'idle');
-    storage.incrementPets();
-    showDialogue('petted');
+
+    lastInteractionRef.current = Date.now();
+
+    if (isSleepingRef.current) {
+      setIsSleeping(false);
+      setCatState('idle');
+      showDialogue('waking_up');
+      return;
+    }
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: e.clientX - rect.left - CAT_W / 2,
+      y: e.clientY - rect.top - CAT_H / 2,
+    };
+    wasDraggedRef.current = false;
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    stateOverrideRef.current = null; // clear any previous override
+    setCatState('held');
+    showDialogue('picked_up');
   }
 
+  // ── Hunger tick ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      const level = getHungerLevel(lastFed);
+      setHungerLevel(level);
+      if (!isDraggingRef.current && !isSleepingRef.current && !stateOverrideRef.current) {
+        if (level <= 0) {
+          setCatState('starving');
+          if (!dialogueActiveRef.current) showDialogue('very_hungry');
+        } else if (level <= 33) {
+          setCatState('hungry');
+        } else {
+          setCatState('idle');
+        }
+      }
+    }, 10000);
+    return () => clearInterval(id);
+  }, [lastFed, showDialogue]);
+
+  // ── Sleep check ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (isDraggingRef.current || stateOverrideRef.current) return;
+      const inactiveTooLong = Date.now() - lastInteractionRef.current > 5 * 60 * 1000;
+      const shouldSleep = isSleepTime() || inactiveTooLong;
+
+      if (shouldSleep && !isSleepingRef.current) {
+        const bed = getBedCenter();
+        setFacingLeft(false);
+        setCatPos(bed);
+        setIsSleeping(true);
+        setCatState('sleeping');
+      } else if (!shouldSleep && isSleepingRef.current) {
+        setIsSleeping(false);
+        setCatState('idle');
+        showDialogue('waking_up');
+      }
+    }, 20000);
+    return () => clearInterval(id);
+  }, [getBedCenter, showDialogue]);
+
+  // ── Random idle behavior ─────────────────────────────────────────────────
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    function schedule() {
+      const delay = 9000 + Math.random() * 7000;
+      timer = setTimeout(() => {
+        if (!isDraggingRef.current && !isSleepingRef.current && !stateOverrideRef.current) {
+          if (Math.random() < 0.6) {
+            const margin = 120;
+            const tx = margin + Math.random() * (window.innerWidth - margin * 2);
+            const ty = window.innerHeight * 0.25 + Math.random() * (window.innerHeight * 0.45);
+            const newPos = clampPos(tx, ty);
+            setCatPos((cur) => {
+              setFacingLeft(newPos.x < cur.x);
+              return cur;
+            });
+            setCatPos(newPos);
+            setCatState('walk');
+            setTimeout(() => {
+              if (!stateOverrideRef.current) setCatState('idle');
+            }, 2200);
+          }
+        }
+        schedule();
+      }, delay);
+    }
+    schedule();
+    return () => clearTimeout(timer);
+  }, []);
+
+  // ── Add food ─────────────────────────────────────────────────────────────
   function handleAddFood() {
-    if (foodInBowl >= 5) return;
-    const next = foodInBowl + 1;
+    if (foodInBowlRef.current >= 5) return;
+    const next = foodInBowlRef.current + 1;
+    foodInBowlRef.current = next;
     setFoodInBowl(next);
     storage.setFoodInBowl(next);
   }
@@ -277,7 +308,7 @@ export default function App() {
     storage.setCatName(name);
     setCatName(name);
     storage.setLastFed(new Date().toISOString());
-    showDialogue('waking_up');
+    setHungerLevel(100);
   }
 
   function handleApiSave(key: string) {
@@ -285,43 +316,36 @@ export default function App() {
     setApiToast(null);
   }
 
-  const displayState = isSleeping ? 'sleeping' : catState;
+  const displayState: CatState = isSleeping ? 'sleeping' : catState;
+
+  function formatTime(ts: number) {
+    return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
 
   return (
-    <div
-      className="game-world"
-      style={{ userSelect: 'none' }}
-    >
-      {/* Decorative room */}
+    <div className="game-world">
+      {/* Room */}
       <div className="room-wall" />
       <div className="room-floor" />
+      <div className="floor-line" />
 
-      {/* Window decoration */}
+      {/* Window */}
       <div className="window-decoration">
-        <div className="window-pane" />
         <div className="window-cross-h" />
         <div className="window-cross-v" />
+        <div className="window-glow" />
       </div>
 
-      {/* HUD top-left */}
+      {/* HUD */}
       <div style={{ position: 'fixed', top: 12, left: 12, zIndex: 100 }}>
         <HungerBar level={hungerLevel} catName={catName ?? 'Neko'} />
       </div>
 
-      {/* Settings gear */}
+      {/* Settings */}
       <button
         onClick={() => setShowSettings(true)}
-        style={{
-          position: 'fixed', top: 12, right: 12,
-          background: 'rgba(0,0,0,0.5)',
-          border: '2px solid #555',
-          color: '#aaa',
-          fontSize: 20,
-          width: 40, height: 40,
-          cursor: 'pointer',
-          zIndex: 100,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
+        className="settings-btn"
+        aria-label="Settings"
       >
         ⚙️
       </button>
@@ -334,73 +358,53 @@ export default function App() {
           top: catPos.y - CAT_H / 2,
           width: CAT_W,
           height: CAT_H,
-          cursor: isSleeping ? 'pointer' : isDragging ? 'grabbing' : 'grab',
+          cursor: isDragging ? 'grabbing' : 'grab',
           zIndex: 50,
-          transition: isDragging ? undefined : 'left 2s ease, top 2s ease',
-          filter: 'drop-shadow(4px 4px 0 rgba(0,0,0,0.25))',
+          transition: isDragging ? 'none' : 'left 2s cubic-bezier(0.25,0.1,0.25,1), top 2s cubic-bezier(0.25,0.1,0.25,1)',
+          filter: 'drop-shadow(3px 6px 0 rgba(0,0,0,0.35))',
         }}
         onMouseDown={handleMouseDown}
-        onClick={handleClick}
       >
-        {/* Speech bubble above cat */}
-        <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', width: 220 }}>
+        <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', width: 230, pointerEvents: 'none' }}>
           <SpeechBubble key={dialogueKey} text={dialogue} />
         </div>
-
-        {/* Sleep bubble */}
-        {sleepBubble && (
-          <div
-            className="pixel-text sleep-bubble"
-            style={{ position: 'absolute', top: -32, right: -10, fontSize: 14, color: '#adf' }}
-          >
-            💤
-          </div>
-        )}
-
         <CatSprite state={displayState} facingLeft={facingLeft} />
       </div>
 
-      {/* Cat bed — bottom left */}
-      <div
-        className="cat-bed"
-        style={{
-          position: 'fixed',
-          bottom: 20,
-          left: 20,
-          zIndex: 10,
-        }}
-      >
-        <div style={{ fontSize: 10, textAlign: 'center', fontFamily: "'Press Start 2P', monospace", color: '#888' }}>
-          🛏️
-        </div>
-        <svg viewBox="0 0 80 32" width={160} height={64} shapeRendering="crispEdges" style={{ imageRendering: 'pixelated', display: 'block' }}>
-          {/* Bed base */}
-          <rect x={0} y={18} width={80} height={14} fill="#8B5E3C" />
-          {/* Mattress */}
-          <rect x={2} y={8} width={76} height={14} fill="#D4856A" />
-          {/* Pillow */}
-          <rect x={4} y={10} width={20} height={10} fill="#F4E0C8" />
-          {/* Blanket */}
-          <rect x={26} y={10} width={50} height={10} fill="#E07534" />
-          <rect x={28} y={12} width={46} height={6} fill="#C05A1F" />
+      {/* Bed */}
+      <div style={{ position: 'fixed', bottom: 20, left: 20, zIndex: 10, lineHeight: 0 }}>
+        <svg viewBox="0 0 90 36" width={180} height={72} shapeRendering="crispEdges" style={{ imageRendering: 'pixelated', display: 'block' }}>
+          <rect x={0} y={20} width={90} height={16} fill="#6B4423" />
+          <rect x={2} y={8}  width={86} height={14} fill="#B07040" />
+          <rect x={4} y={10} width={82} height={10} fill="#C88050" />
+          <rect x={4} y={10} width={22} height={9}  fill="#F4E0C8" />
+          <rect x={28} y={10} width={58} height={9} fill="#C05A1F" />
+          <rect x={30} y={12} width={54} height={5} fill="#E07534" />
+          <rect x={10} y={0} width={6}  height={10} fill="#6B4423" />
+          <rect x={74} y={0} width={6}  height={10} fill="#6B4423" />
         </svg>
+        <div className="pixel-text" style={{ fontSize: 6, color: '#6B4423', textAlign: 'center', marginTop: 2 }}>bed</div>
       </div>
 
-      {/* Food bowl — bottom center */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 20,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
+      {/* Bowl */}
+      <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
         <FoodBowl foodCount={foodInBowl} onAddFood={handleAddFood} />
       </div>
+
+      {/* Chat history */}
+      {chatHistory.length > 0 && (
+        <div className="chat-history">
+          <div className="pixel-text" style={{ fontSize: 6, color: '#F4B56A', marginBottom: 6, borderBottom: '1px solid #3d2b1c', paddingBottom: 4 }}>
+            {catName ?? 'Neko'}'s diary
+          </div>
+          {chatHistory.map((entry) => (
+            <div key={entry.ts} className="chat-entry">
+              <span className="chat-time">{formatTime(entry.ts)}</span>
+              <span className="chat-text">{entry.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Modals */}
       {!catName && <NameModal onSubmit={handleNameSubmit} />}

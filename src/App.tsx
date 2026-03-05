@@ -79,7 +79,7 @@ export default function App() {
 
   const getBowlCenter = useCallback((): Position => ({
     x: window.innerWidth / 2,
-    y: window.innerHeight - 100,
+    y: window.innerHeight * 0.68 - 42, // center of bowl SVG (84px tall) sitting on floor
   }), []);
 
   const getBedCenter = useCallback((): Position => ({
@@ -380,8 +380,8 @@ export default function App() {
         <CatSprite state={displayState} facingLeft={facingLeft} />
       </div>
 
-      {/* Bed */}
-      <div style={{ position: 'fixed', bottom: 20, left: 20, zIndex: 10, lineHeight: 0 }}>
+      {/* Bed — bottom of SVG (72px tall) sits on floor line at 68vh */}
+      <div style={{ position: 'fixed', top: 'calc(68vh - 72px)', left: 20, zIndex: 10, lineHeight: 0 }}>
         <svg viewBox="0 0 90 36" width={180} height={72} shapeRendering="crispEdges" style={{ imageRendering: 'pixelated', display: 'block' }}>
           <rect x={0} y={20} width={90} height={16} fill="#6B4423" />
           <rect x={2} y={8}  width={86} height={14} fill="#B07040" />
@@ -395,8 +395,8 @@ export default function App() {
         <div className="pixel-text" style={{ fontSize: 6, color: '#6B4423', textAlign: 'center', marginTop: 2 }}>bed</div>
       </div>
 
-      {/* Bowl */}
-      <div style={{ position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
+      {/* Bowl — bottom of SVG (84px) sits on floor line at 68vh */}
+      <div style={{ position: 'fixed', top: 'calc(68vh - 84px)', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
         <FoodBowl foodCount={foodInBowl} onAddFood={handleAddFood} />
       </div>
 

@@ -21,23 +21,41 @@ html, body, #root {
 .room-wall {
   position: absolute;
   inset: 0 0 32% 0;
-  background: linear-gradient(180deg, #1a0e08 0%, #2a1a10 100%);
+  background: #1e1208;
+  /* subtle vertical wallpaper stripes */
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 48px,
+    rgba(255,255,255,0.025) 48px,
+    rgba(255,255,255,0.025) 50px
+  );
 }
 
 .room-floor {
   position: absolute;
   inset: 68% 0 0 0;
-  background: linear-gradient(180deg, #7a5030 0%, #5a3820 100%);
+  background: #6a4228; /* flat solid wood-brown */
 }
 
-/* Hard visible floor line */
+/* Floor line — the skirting board / baseboard */
 .floor-line {
   position: absolute;
   top: 68%;
   left: 0; right: 0;
-  height: 6px;
+  height: 8px;
   background: #9a6840;
-  box-shadow: 0 2px 0 #5a3820, 0 -2px 0 #3a2010;
+  box-shadow: 0 3px 0 #4a2e18, 0 -2px 0 #c89060;
+}
+
+/* Baseboard trim just above floor line */
+.floor-line::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 0; right: 0;
+  height: 4px;
+  background: #5a3820;
 }
 
 /* ─── Window decoration ─────────────────────────── */

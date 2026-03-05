@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import type { DialogueTrigger } from './types';
 
 const FALLBACKS: Record<DialogueTrigger, string[]> = {
-  eaten:       ["Finally!! I was WASTING AWAY.", "Nom nom nom 😸", "More. Give more."],
+  eaten:       ["Finally!! I was WASTING AWAY.", "Nom nom nom!", "More. Give more."],
   bowl_empty:  ["Bowl. Empty. Unacceptable.", "...you forgot. Again.", "I stare into the void of this bowl."],
   petted:      ["...fine. Just this once.", "Purrr", "I tolerate this."],
   picked_up:   ["PUT ME DOWN.", "Oh no.", "I did not consent to this."],
@@ -21,6 +21,14 @@ const PROMPTS: Record<DialogueTrigger, string> = {
   waking_up:   "You just woke up from a nap. React groggily.",
 };
 
+function hungerDescription(lastFedIso: string): string {
+  const mins = (Date.now() - new Date(lastFedIso).getTime()) / 60000;
+  if (mins < 60) return "full and content";
+  if (mins < 180) return "a bit peckish";
+  if (mins < 300) return "quite hungry";
+  return "absolutely starving";
+}
+
 function randomFrom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
@@ -28,16 +36,19 @@ function randomFrom<T>(arr: T[]): T {
 export async function getDialogue(
   trigger: DialogueTrigger,
   catName: string,
-  apiKey: string
+  apiKey: string,
+  lastFedIso?: string,
 ): Promise<string> {
   if (!apiKey) return randomFrom(FALLBACKS[trigger]);
+
+  const hunger = lastFedIso ? hungerDescription(lastFedIso) : 'a bit peckish';
 
   try {
     const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
     const msg = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 60,
-      system: `You are a pixel art cat named ${catName}. You speak in short, expressive cat reactions — 1-2 sentences max. You're dramatic, cute, and a little chaotic. Never break character. Never say you're an AI.`,
+      system: `You are a pixel art cat named ${catName}. Right now you are ${hunger}. You speak in short, expressive cat reactions — 1-2 sentences max. You're dramatic, cute, and a little chaotic. Never break character. Never say you're an AI.`,
       messages: [{ role: 'user', content: PROMPTS[trigger] }],
     });
     const block = msg.content[0];

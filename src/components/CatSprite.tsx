@@ -1,43 +1,45 @@
-import type { CatState } from '../types';
+import type { CatState, CatVariant } from '../types';
 
 interface Props {
   state: CatState;
   facingLeft?: boolean;
+  variant?: CatVariant;
 }
 
-// Pixel art cat rendered as SVG rects on a 32×40 grid (displayed at 4× = 128×160px)
-// Each element is a <rect> at integer coords, shape-rendering=crispEdges for no antialiasing
+// Pixel art cat rendered as SVG rects on a 32×44 grid (displayed at 2.5× = 80×110px)
 
-const O = '#E07534'; // orange body
-const L = '#F4B56A'; // light face / belly
-const D = '#C05A1F'; // dark stripe / detail
-const B = '#1A1A2E'; // black eyes
+interface Pal { O: string; L: string; D: string; P: string }
+
+// Fixed colors (same for all variants)
+const B = '#1A1A2E'; // eye black
 const W = '#FFFFFF'; // eye highlight
-const P = '#FF9EAE'; // nose / inner ear
-const G = '#2A2A4A'; // dark pupil
+const G = '#2A2A4A'; // pupil
 
-function Rect({
-  x, y, w = 1, h = 1, fill,
-}: { x: number; y: number; w?: number; h?: number; fill: string }) {
+const PALETTES: Record<CatVariant, Pal> = {
+  orange:  { O: '#E07534', L: '#F4B56A', D: '#C05A1F', P: '#FF9EAE' },
+  gray:    { O: '#8A8A9E', L: '#C8C8D8', D: '#5A5A6E', P: '#FFB8C4' },
+  white:   { O: '#D8D8E8', L: '#F4F4FC', D: '#9898B0', P: '#FFB8C4' },
+  black:   { O: '#303040', L: '#606070', D: '#202030', P: '#FF9EAE' },
+  brown:   { O: '#8B5A2A', L: '#C89050', D: '#6B3A1A', P: '#FFB8C4' },
+  calico:  { O: '#E07534', L: '#F0F0F0', D: '#303040', P: '#FFB8C4' },
+  tuxedo:  { O: '#303040', L: '#F0F0F0', D: '#202030', P: '#FFB8C4' },
+};
+
+function Rect({ x, y, w = 1, h = 1, fill }: { x: number; y: number; w?: number; h?: number; fill: string }) {
   return <rect x={x} y={y} width={w} height={h} fill={fill} />;
 }
 
-function EarsAndHead() {
+function EarsAndHead({ p }: { p: Pal }) {
   return (
     <>
-      {/* Left ear */}
-      <Rect x={2} y={0} w={7} h={8} fill={O} />
-      <Rect x={3} y={1} w={4} h={6} fill={P} />
-      {/* Right ear */}
-      <Rect x={23} y={0} w={7} h={8} fill={O} />
-      <Rect x={25} y={1} w={4} h={6} fill={P} />
-      {/* Head outline */}
-      <Rect x={1} y={6} w={30} h={19} fill={O} />
-      {/* Face */}
-      <Rect x={5} y={8} w={22} h={15} fill={L} />
-      {/* Forehead stripes */}
-      <Rect x={12} y={8} w={2} h={4} fill={D} />
-      <Rect x={18} y={8} w={2} h={4} fill={D} />
+      <Rect x={2}  y={0} w={7} h={8} fill={p.O} />
+      <Rect x={3}  y={1} w={4} h={6} fill={p.P} />
+      <Rect x={23} y={0} w={7} h={8} fill={p.O} />
+      <Rect x={25} y={1} w={4} h={6} fill={p.P} />
+      <Rect x={1}  y={6} w={30} h={19} fill={p.O} />
+      <Rect x={5}  y={8} w={22} h={15} fill={p.L} />
+      <Rect x={12} y={8} w={2}  h={4}  fill={p.D} />
+      <Rect x={18} y={8} w={2}  h={4}  fill={p.D} />
     </>
   );
 }
@@ -45,11 +47,9 @@ function EarsAndHead() {
 function OpenEyes() {
   return (
     <>
-      {/* Left eye */}
-      <Rect x={7} y={13} w={6} h={6} fill={B} />
-      <Rect x={9} y={14} w={2} h={2} fill={W} />
-      <Rect x={8} y={15} w={1} h={1} fill={G} />
-      {/* Right eye */}
+      <Rect x={7}  y={13} w={6} h={6} fill={B} />
+      <Rect x={9}  y={14} w={2} h={2} fill={W} />
+      <Rect x={8}  y={15} w={1} h={1} fill={G} />
       <Rect x={19} y={13} w={6} h={6} fill={B} />
       <Rect x={21} y={14} w={2} h={2} fill={W} />
       <Rect x={20} y={15} w={1} h={1} fill={G} />
@@ -58,29 +58,27 @@ function OpenEyes() {
 }
 
 function HalfEyes() {
-  // Content / squinting
   return (
     <>
-      <Rect x={7} y={15} w={6} h={3} fill={B} />
+      <Rect x={7}  y={15} w={6} h={3} fill={B} />
       <Rect x={19} y={15} w={6} h={3} fill={B} />
     </>
   );
 }
 
-function ClosedEyes() {
+function ClosedEyes({ p }: { p: Pal }) {
   return (
     <>
-      <Rect x={7} y={16} w={6} h={2} fill={D} />
-      <Rect x={19} y={16} w={6} h={2} fill={D} />
+      <Rect x={7}  y={16} w={6} h={2} fill={p.D} />
+      <Rect x={19} y={16} w={6} h={2} fill={p.D} />
     </>
   );
 }
 
 function SideEyes() {
-  // Hungry — looking toward bowl (right)
   return (
     <>
-      <Rect x={9} y={13} w={6} h={6} fill={B} />
+      <Rect x={9}  y={13} w={6} h={6} fill={B} />
       <Rect x={13} y={14} w={2} h={2} fill={W} />
       <Rect x={21} y={13} w={6} h={6} fill={B} />
       <Rect x={25} y={14} w={2} h={2} fill={W} />
@@ -88,113 +86,93 @@ function SideEyes() {
   );
 }
 
-function Nose() {
+function Nose({ p }: { p: Pal }) {
   return (
     <>
-      <Rect x={14} y={20} w={4} h={3} fill={P} />
-      {/* Whiskers */}
-      <Rect x={2} y={21} w={10} h={1} fill={D} />
-      <Rect x={20} y={21} w={10} h={1} fill={D} />
-      <Rect x={2} y={23} w={10} h={1} fill={D} />
-      <Rect x={20} y={23} w={10} h={1} fill={D} />
+      <Rect x={14} y={20} w={4} h={3} fill={p.P} />
+      <Rect x={2}  y={21} w={10} h={1} fill={p.D} />
+      <Rect x={20} y={21} w={10} h={1} fill={p.D} />
+      <Rect x={2}  y={23} w={10} h={1} fill={p.D} />
+      <Rect x={20} y={23} w={10} h={1} fill={p.D} />
     </>
   );
 }
 
-function SittingBody() {
+function SittingBody({ p }: { p: Pal }) {
   return (
     <>
-      {/* Neck */}
-      <Rect x={10} y={25} w={12} h={3} fill={O} />
-      {/* Body */}
-      <Rect x={4} y={27} w={24} h={12} fill={O} />
-      {/* Belly */}
-      <Rect x={8} y={29} w={16} h={8} fill={L} />
-      {/* Front paws */}
-      <Rect x={4} y={37} w={8} h={5} fill={O} />
-      <Rect x={20} y={37} w={8} h={5} fill={O} />
-      {/* Paw toes */}
-      <Rect x={7} y={41} w={1} h={1} fill={D} />
-      <Rect x={9} y={41} w={1} h={1} fill={D} />
-      <Rect x={22} y={41} w={1} h={1} fill={D} />
-      <Rect x={24} y={41} w={1} h={1} fill={D} />
-      {/* Tail */}
-      <Rect x={28} y={30} w={4} h={10} fill={O} />
-      <Rect x={25} y={38} w={3} h={4} fill={O} />
-      <Rect x={28} y={40} w={4} h={2} fill={D} />
+      <Rect x={10} y={25} w={12} h={3}  fill={p.O} />
+      <Rect x={4}  y={27} w={24} h={12} fill={p.O} />
+      <Rect x={8}  y={29} w={16} h={8}  fill={p.L} />
+      <Rect x={4}  y={37} w={8}  h={5}  fill={p.O} />
+      <Rect x={20} y={37} w={8}  h={5}  fill={p.O} />
+      <Rect x={7}  y={41} w={1}  h={1}  fill={p.D} />
+      <Rect x={9}  y={41} w={1}  h={1}  fill={p.D} />
+      <Rect x={22} y={41} w={1}  h={1}  fill={p.D} />
+      <Rect x={24} y={41} w={1}  h={1}  fill={p.D} />
+      <Rect x={28} y={30} w={4}  h={10} fill={p.O} />
+      <Rect x={25} y={38} w={3}  h={4}  fill={p.O} />
+      <Rect x={28} y={40} w={4}  h={2}  fill={p.D} />
     </>
   );
 }
 
-function LyingBody() {
+function LyingBody({ p }: { p: Pal }) {
   return (
     <>
-      {/* Flat body */}
-      <Rect x={0} y={27} w={32} h={8} fill={O} />
-      {/* Belly patch */}
-      <Rect x={4} y={28} w={24} h={6} fill={L} />
-      {/* Paws extended */}
-      <Rect x={0} y={33} w={10} h={4} fill={O} />
-      <Rect x={22} y={33} w={10} h={4} fill={O} />
-      {/* Tail curled */}
-      <Rect x={24} y={34} w={8} h={3} fill={O} />
+      <Rect x={0}  y={27} w={32} h={8} fill={p.O} />
+      <Rect x={4}  y={28} w={24} h={6} fill={p.L} />
+      <Rect x={0}  y={33} w={10} h={4} fill={p.O} />
+      <Rect x={22} y={33} w={10} h={4} fill={p.O} />
+      <Rect x={24} y={34} w={8}  h={3} fill={p.O} />
     </>
   );
 }
 
-function DanglingBody() {
+function DanglingBody({ p }: { p: Pal }) {
   return (
     <>
-      {/* Neck */}
-      <Rect x={10} y={25} w={12} h={3} fill={O} />
-      {/* Body */}
-      <Rect x={6} y={27} w={20} h={10} fill={O} />
-      {/* Belly */}
-      <Rect x={9} y={29} w={14} h={6} fill={L} />
-      {/* Dangling legs */}
-      <Rect x={6} y={36} w={5} h={8} fill={O} />
-      <Rect x={21} y={36} w={5} h={8} fill={O} />
-      {/* Tail up */}
-      <Rect x={26} y={24} w={4} h={10} fill={O} />
-      <Rect x={22} y={24} w={4} h={4} fill={O} />
+      <Rect x={10} y={25} w={12} h={3}  fill={p.O} />
+      <Rect x={6}  y={27} w={20} h={10} fill={p.O} />
+      <Rect x={9}  y={29} w={14} h={6}  fill={p.L} />
+      <Rect x={6}  y={36} w={5}  h={8}  fill={p.O} />
+      <Rect x={21} y={36} w={5}  h={8}  fill={p.O} />
+      <Rect x={26} y={24} w={4}  h={10} fill={p.O} />
+      <Rect x={22} y={24} w={4}  h={4}  fill={p.O} />
     </>
   );
 }
 
-function EatingPose() {
+function EatingPose({ p }: { p: Pal }) {
   return (
     <>
-      {/* Neck stretched down */}
-      <Rect x={10} y={25} w={12} h={6} fill={O} />
-      {/* Body */}
-      <Rect x={4} y={30} w={24} h={10} fill={O} />
-      {/* Belly */}
-      <Rect x={8} y={32} w={16} h={6} fill={L} />
-      {/* Front paws */}
-      <Rect x={4} y={38} w={8} h={4} fill={O} />
-      <Rect x={20} y={38} w={8} h={4} fill={O} />
-      {/* Tail up excited */}
-      <Rect x={28} y={22} w={4} h={12} fill={O} />
+      <Rect x={10} y={25} w={12} h={6}  fill={p.O} />
+      <Rect x={4}  y={30} w={24} h={10} fill={p.O} />
+      <Rect x={8}  y={32} w={16} h={6}  fill={p.L} />
+      <Rect x={4}  y={38} w={8}  h={4}  fill={p.O} />
+      <Rect x={20} y={38} w={8}  h={4}  fill={p.O} />
+      <Rect x={28} y={22} w={4}  h={12} fill={p.O} />
     </>
   );
 }
 
-export default function CatSprite({ state, facingLeft = false }: Props) {
+export default function CatSprite({ state, facingLeft = false, variant = 'orange' }: Props) {
+  const p = PALETTES[variant];
   const size = 32;
   const viewH = 44;
 
   const eyes = (() => {
-    if (state === 'sleeping') return <ClosedEyes />;
+    if (state === 'sleeping') return <ClosedEyes p={p} />;
     if (state === 'happy' || state === 'eating') return <HalfEyes />;
     if (state === 'hungry' || state === 'starving') return <SideEyes />;
     return <OpenEyes />;
   })();
 
   const body = (() => {
-    if (state === 'sleeping') return <LyingBody />;
-    if (state === 'held') return <DanglingBody />;
-    if (state === 'eating') return <EatingPose />;
-    return <SittingBody />;
+    if (state === 'sleeping') return <LyingBody p={p} />;
+    if (state === 'held') return <DanglingBody p={p} />;
+    if (state === 'eating') return <EatingPose p={p} />;
+    return <SittingBody p={p} />;
   })();
 
   const cssClass = (() => {
@@ -223,14 +201,14 @@ export default function CatSprite({ state, facingLeft = false }: Props) {
     >
       <svg
         viewBox={`0 0 ${size} ${viewH}`}
-        width={size * 4}
-        height={viewH * 4}
+        width={size * 2.5}
+        height={viewH * 2.5}
         style={{ imageRendering: 'pixelated' }}
         shapeRendering="crispEdges"
       >
-        <EarsAndHead />
+        <EarsAndHead p={p} />
         {eyes}
-        <Nose />
+        <Nose p={p} />
         {body}
       </svg>
     </div>

@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import "tailwindcss";
+
+/* ─── Reset / Base ──────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1a0f0a;
+}
+
+/* ─── Game World ────────────────────────────────── */
+.game-world {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.room-wall {
+  position: absolute;
+  inset: 0 0 35% 0;
+  background: linear-gradient(180deg, #2d1f14 0%, #3d2b1c 100%);
+}
+
+.room-floor {
+  position: absolute;
+  inset: 65% 0 0 0;
+  background: linear-gradient(180deg, #4a3220 0%, #3a2515 100%);
+  border-top: 4px solid #5a3f2a;
+}
+
+/* ─── Window decoration ─────────────────────────── */
+.window-decoration {
+  position: fixed;
+  top: 40px;
+  right: 60px;
+  width: 120px;
+  height: 100px;
+  background: #87ceeb;
+  border: 4px solid #5a3f2a;
+  box-shadow: inset 0 0 20px rgba(135, 206, 235, 0.5);
+  image-rendering: pixelated;
+}
+.window-cross-h {
+  position: absolute;
+  top: 50%;
+  left: 0; right: 0;
+  height: 4px;
+  background: #5a3f2a;
+  transform: translateY(-50%);
+}
+.window-cross-v {
+  position: absolute;
+  left: 50%;
+  top: 0; bottom: 0;
+  width: 4px;
+  background: #5a3f2a;
+  transform: translateX(-50%);
+}
+
+/* ─── Pixel Font ────────────────────────────────── */
+.pixel-text {
+  font-family: 'Press Start 2P', monospace;
+  image-rendering: pixelated;
+  line-height: 1.6;
+}
+
+/* ─── HUD panel ─────────────────────────────────── */
+.hud-box {
+  background: rgba(0,0,0,0.75);
+  border: 2px solid #5a3f2a;
+  padding: 8px 12px;
+  font-family: 'Press Start 2P', monospace;
+}
+
+/* ─── Pixel Button ──────────────────────────────── */
+.pixel-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 8px 14px;
+  background: #3d2b1c;
+  color: #F4B56A;
+  border: 2px solid #F4B56A;
+  cursor: pointer;
+  image-rendering: pixelated;
+  transition: background 0.1s;
+}
+.pixel-btn:hover {
+  background: #5a3f2a;
+}
+.pixel-btn:active {
+  transform: translate(1px,1px);
+}
+.pixel-btn-primary {
+  background: #E07534;
+  color: #fff;
+  border-color: #F4B56A;
+}
+.pixel-btn-primary:hover {
+  background: #F4B56A;
+  color: #2d1f14;
+}
+
+/* ─── Pixel Input ───────────────────────────────── */
+.pixel-input {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 8px 10px;
+  background: #1a0f0a;
+  color: #F4B56A;
+  border: 2px solid #5a3f2a;
+  outline: none;
+  width: 100%;
+}
+.pixel-input:focus {
+  border-color: #F4B56A;
+}
+
+/* ─── Panel ─────────────────────────────────────── */
+.pixel-panel {
+  background: #1e120a;
+  border: 3px solid #5a3f2a;
+  box-shadow: 4px 4px 0 #0a0604;
+}
+
+/* ─── Speech Bubble ─────────────────────────────── */
+.speech-bubble {
+  position: relative;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  line-height: 1.6;
+  color: #1a0f0a;
+  background: #fff9f0;
+  padding: 8px 12px;
+  max-width: 220px;
+  /* pixel-art border using box-shadow steps */
+  box-shadow:
+    0   -2px 0 0 #c8a87a,
+    0    2px 0 0 #c8a87a,
+    -2px 0   0 0 #c8a87a,
+    2px  0   0 0 #c8a87a,
+    -2px -2px 0 0 #c8a87a,
+    2px  -2px 0 0 #c8a87a,
+    -2px 2px  0 0 #c8a87a,
+    2px  2px  0 0 #c8a87a,
+    4px  4px  0 0 rgba(0,0,0,0.3);
+  word-wrap: break-word;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  background: #fff9f0;
+  box-shadow:
+    0 2px 0 0 #c8a87a,
+    -2px 2px 0 0 #c8a87a,
+    2px 2px 0 0 #c8a87a;
+}
+
+/* ─── Cat Animations ────────────────────────────── */
+@keyframes cat-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-6px); }
+}
+
+@keyframes cat-happy-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25%       { transform: translateY(-8px) rotate(-3deg); }
+  75%       { transform: translateY(-4px) rotate(3deg); }
+}
+
+@keyframes cat-hungry-pace {
+  0%, 100% { transform: translateX(0); }
+  25%       { transform: translateX(-8px); }
+  75%       { transform: translateX(8px); }
+}
+
+@keyframes cat-eating-nod {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(6px); }
+}
+
+@keyframes cat-held-dangle {
+  0%, 100% { transform: rotate(-5deg); }
+  50%       { transform: rotate(5deg); }
+}
+
+@keyframes cat-sleep-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50%       { transform: scaleY(0.95); }
+}
+
+@keyframes cat-walk-bob {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-4px); }
+}
+
+@keyframes hunger-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes sleep-float {
+  0%   { transform: translate(-50%, 0) scale(1);  opacity: 1; }
+  100% { transform: translate(-50%, -24px) scale(1.3); opacity: 0; }
+}
+
+.cat-idle    { animation: cat-float       3s ease-in-out infinite; }
+.cat-happy   { animation: cat-happy-bounce 0.5s ease-in-out infinite; }
+.cat-hungry  { animation: cat-hungry-pace  1.2s ease-in-out infinite; }
+.cat-starving { animation: cat-hungry-pace 0.7s ease-in-out infinite; }
+.cat-eating  { animation: cat-eating-nod  0.4s ease-in-out infinite; }
+.cat-held    { animation: cat-held-dangle  0.6s ease-in-out infinite; }
+.cat-sleeping { animation: cat-sleep-breathe 2.5s ease-in-out infinite; }
+.cat-walk    { animation: cat-walk-bob    0.4s ease-in-out infinite; }
+
+.sleep-bubble {
+  animation: sleep-float 2s ease-out forwards;
+}
